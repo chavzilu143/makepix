@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MakePix - AI Image Generator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Nunito', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e8e8e8;
+            padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: "⚡ 🚀 🎮 🔥 💥 🎯 ⭐ ⚡ 🚀 🎮";
+            position: fixed;
+            top: 20px;
+            left: 0;
+            right: 0;
+            font-size: 2rem;
+            text-align: center;
+            opacity: 0.2;
+            animation: float 6s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(90deg, #00d9ff 0%, #00ff88 25%, #ffaa00 50%, #ff6b35 75%, #00d9ff 100%);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+            animation: gradient-shift 3s ease infinite;
+        }
+
+        @keyframes gradient-shift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .subtitle {
+            color: #88aacc;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .status-bar {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            padding: 15px 25px;
+            border-radius: 50px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 8px 25px rgba(0,217,255,0.15);
+            border: 2px solid rgba(0,217,255,0.3);
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 600;
+        }
+
+        .status-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #ff6b35;
+            animation: pulse 1.5s ease-in-out infinite;
+            box-shadow: 0 0 15px rgba(255,107,53,0.5);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+        }
+
+        .status-dot.ready {
+            background: #00ff88;
+            box-shadow: 0 0 15px rgba(0,255,136,0.5);
+            animation: none;
+        }
+
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 700;
+            font-family: 'Nunito', sans-serif;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0) scale(0.98);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #00d9ff 0%, #00ff88 100%);
+            color: #1a1a2e;
+            box-shadow: 0 6px 20px rgba(0,217,255,0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #ff6b35 0%, #ffaa00 100%);
+            color: #1a1a2e;
+            box-shadow: 0 6px 20px rgba(255,107,53,0.4);
+        }
+
+        .input-section {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+            border: 2px solid rgba(0,217,255,0.2);
+        }
+
+        .input-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 10px;
+            color: #00d9ff;
+            font-size: 1rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        label::before {
+            content: "⚡ ";
+        }
+
+        textarea {
+            width: 100%;
+            padding: 18px;
+            border: 2px solid rgba(0,217,255,0.3);
+            border-radius: 20px;
+            background: rgba(0,0,0,0.3);
+            color: #e8e8e8;
+            font-size: 1rem;
+            font-family: 'Nunito', sans-serif;
+            resize: vertical;
+            min-height: 120px;
+            transition: all 0.3s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #00d9ff;
+            box-shadow: 0 0 0 4px rgba(0,217,255,0.2);
+            background: rgba(0,0,0,0.5);
+        }
+
+        textarea::placeholder {
+            color: #666;
+        }
+
+        select {
+            width: 100%;
+            padding: 15px 20px;
+            border: 2px solid rgba(255,170,0,0.3);
+            border-radius: 20px;
+            background: rgba(0,0,0,0.3);
+            color: #e8e8e8;
+            font-size: 1rem;
+            font-family: 'Nunito', sans-serif;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #ffaa00;
+            box-shadow: 0 0 0 4px rgba(255,170,0,0.2);
+        }
+
+        select option {
+            background: #1a1a2e;
+            color: #e8e8e8;
+        }
+
+        .generate-btn {
+            width: 100%;
+            padding: 20px;
+            font-size: 1.3rem;
+            background: linear-gradient(135deg, #00d9ff 0%, #00ff88 50%, #ffaa00 100%);
+            background-size: 200% auto;
+            color: #1a1a2e;
+            animation: shimmer 3s ease infinite;
+        }
+
+        .generate-btn::before {
+            content: "🚀 ";
+        }
+
+        .generate-btn::after {
+            content: " 🔥";
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .results-section {
+            margin-top: 30px;
+        }
+
+        .results-title {
+            font-size: 1.8rem;
+            margin-bottom: 25px;
+            color: #00ff88;
+            text-align: center;
+            font-weight: 800;
+        }
+
+        .results-title::before {
+            content: "🎯 ";
+        }
+
+        .results-title::after {
+            content: " 💥";
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 25px;
+        }
+
+        .image-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 25px;
+            overflow: hidden;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+            border: 2px solid rgba(0,217,255,0.2);
+            transition: all 0.3s ease;
+        }
+
+        .image-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 25px 50px rgba(0,217,255,0.2);
+            border-color: rgba(0,217,255,0.5);
+        }
+
+        .image-card img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .image-info {
+            padding: 20px;
+            background: rgba(0,0,0,0.3);
+        }
+
+        .image-prompt {
+            color: #88aacc;
+            font-size: 0.95rem;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .image-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .image-actions .btn {
+            flex: 1;
+            padding: 12px;
+            font-size: 0.85rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 30px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+            border: 2px solid rgba(0,217,255,0.2);
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 6px solid rgba(0,217,255,0.2);
+            border-top-color: #00d9ff;
+            border-right-color: #00ff88;
+            border-bottom-color: #ffaa00;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 25px;
+        }
+
+        .loading p {
+            font-size: 1.2rem;
+            color: #88aacc;
+            font-weight: 600;
+        }
+
+        .loading p::before {
+            content: "⚡ ";
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: rgba(255,100,100,0.1);
+            border: 2px solid rgba(255,100,100,0.5);
+            padding: 20px;
+            border-radius: 20px;
+            margin-top: 20px;
+            color: #ff6b6b;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .input-section::before {
+            content: "🔥";
+            position: absolute;
+            top: -15px;
+            left: 30px;
+            font-size: 2rem;
+        }
+
+        .input-section {
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚡ MakePix ⚡</h1>
+            <p class="subtitle">🚀 Create epic images with AI! 🎮</p>
+        </header>
+
+        <div class="status-bar">
+            <div class="status">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Initializing...</span>
+            </div>
+            <button class="btn btn-secondary" id="initBtn" onclick="initBrowser()" style="display: none;">
+                Retry Initialize
+            </button>
+        </div>
+
+        <div class="input-section">
+            <div class="input-group">
+                <label for="prompt">Prompt</label>
+                <textarea id="prompt" placeholder="Describe something awesome... like a dragon breathing fire! 🐉">A powerful robot warrior with glowing neon armor in a cyberpunk city</textarea>
+            </div>
+
+            <div class="input-group">
+                <label for="aspectRatio">Aspect Ratio</label>
+                <select id="aspectRatio">
+                    <option value="IMAGE_ASPECT_RATIO_LANDSCAPE">Landscape (16:9)</option>
+                    <option value="IMAGE_ASPECT_RATIO_PORTRAIT">Portrait (9:16)</option>
+                    <option value="IMAGE_ASPECT_RATIO_SQUARE">Square (1:1)</option>
+                </select>
+            </div>
+
+            <button class="btn btn-primary generate-btn" id="generateBtn" onclick="generateImage()" disabled>
+                Make Pix!
+            </button>
+        </div>
+
+        <div class="loading hidden" id="loading">
+            <div class="spinner"></div>
+            <p>Generating your epic image... Hold tight! 🔥</p>
+        </div>
+
+        <div class="error hidden" id="error"></div>
+
+        <div class="results-section hidden" id="results">
+            <h2 class="results-title">Generated Images</h2>
+            <div class="image-grid" id="imageGrid"></div>
+        </div>
+    </div>
+
+    <script>
+        let isReady = false;
+
+        async function initBrowser() {
+            const btn = document.getElementById('initBtn');
+            const statusText = document.getElementById('statusText');
+
+            btn.disabled = true;
+            btn.textContent = 'Initializing...';
+            statusText.textContent = 'Starting browser...';
+
+            try {
+                const res = await fetch('/api/init', { method: 'POST' });
+                const data = await res.json();
+
+                if (data.success) {
+                    checkStatus(); // Re-check status
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                statusText.textContent = 'Failed: ' + error.message;
+                btn.disabled = false;
+                btn.textContent = 'Retry Initialize';
+            }
+        }
+
+        async function generateImage() {
+            const prompt = document.getElementById('prompt').value.trim();
+            const aspectRatio = document.getElementById('aspectRatio').value;
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const results = document.getElementById('results');
+            const generateBtn = document.getElementById('generateBtn');
+
+            if (!prompt) {
+                showError('Please enter a prompt');
+                return;
+            }
+
+            generateBtn.disabled = true;
+            loading.classList.remove('hidden');
+            error.classList.add('hidden');
+
+            try {
+                const res = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt, aspectRatio })
+                });
+
+                const data = await res.json();
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                displayImages(data.images);
+            } catch (err) {
+                showError(err.message);
+            } finally {
+                loading.classList.add('hidden');
+                generateBtn.disabled = false;
+            }
+        }
+
+        function displayImages(images) {
+            const results = document.getElementById('results');
+            const grid = document.getElementById('imageGrid');
+
+            if (!images || images.length === 0) {
+                showError('No images generated');
+                return;
+            }
+
+            results.classList.remove('hidden');
+
+            images.forEach(img => {
+                const card = document.createElement('div');
+                card.className = 'image-card';
+                card.innerHTML = `
+                    <img src="${img.url}" alt="${img.prompt}" loading="lazy">
+                    <div class="image-info">
+                        <p class="image-prompt">${img.prompt}</p>
+                        <div class="image-actions">
+                            <a href="${img.url}" target="_blank" class="btn btn-secondary">Open Full</a>
+                            <button class="btn btn-primary" onclick="downloadImage('${img.url}', '${img.id}')">Download</button>
+                        </div>
+                    </div>
+                `;
+                grid.insertBefore(card, grid.firstChild);
+            });
+        }
+
+        async function downloadImage(url, id) {
+            try {
+                const res = await fetch(url);
+                const blob = await res.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = `flow-image-${id}.png`;
+                a.click();
+                URL.revokeObjectURL(blobUrl);
+            } catch (err) {
+                alert('Download failed: ' + err.message);
+            }
+        }
+
+        function showError(message) {
+            const error = document.getElementById('error');
+            error.textContent = '❌ ' + message;
+            error.classList.remove('hidden');
+        }
+
+        // Check health on load - poll until ready
+        async function checkStatus() {
+            try {
+                const res = await fetch('/api/health');
+                const data = await res.json();
+                
+                const statusDot = document.getElementById('statusDot');
+                const statusText = document.getElementById('statusText');
+                const initBtn = document.getElementById('initBtn');
+                const generateBtn = document.getElementById('generateBtn');
+                
+                if (data.browserReady) {
+                    isReady = true;
+                    statusDot.classList.add('ready');
+                    statusText.textContent = '🎉 Ready to create magic!';
+                    generateBtn.disabled = false;
+                    initBtn.style.display = 'none';
+                } else if (data.isInitializing) {
+                    statusText.textContent = '🔐 Opening browser - please sign in...';
+                    setTimeout(checkStatus, 2000); // Poll every 2 seconds
+                } else if (data.error) {
+                    statusText.textContent = '😢 Oops: ' + data.error;
+                    initBtn.style.display = 'block';
+                } else {
+                    statusText.textContent = 'Waiting to initialize...';
+                    setTimeout(checkStatus, 2000);
+                }
+            } catch (error) {
+                document.getElementById('statusText').textContent = 'Server not responding...';
+                setTimeout(checkStatus, 3000);
+            }
+        }
+        
+        checkStatus();
+    </script>
+</body>
+</html>
