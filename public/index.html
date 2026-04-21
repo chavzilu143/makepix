@@ -209,6 +209,48 @@
             color: #666;
         }
 
+        .image-upload-area {
+            position: relative;
+        }
+
+        .image-upload-area input[type="file"] {
+            width: 100%;
+            padding: 15px;
+            border: 2px dashed rgba(0,255,136,0.4);
+            border-radius: 20px;
+            background: rgba(0,0,0,0.2);
+            color: #88aacc;
+            cursor: pointer;
+        }
+
+        .image-upload-area input[type="file"]:hover {
+            border-color: #00ff88;
+            background: rgba(0,255,136,0.1);
+        }
+
+        .upload-preview {
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 15px;
+        }
+
+        .upload-preview img {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 10px;
+            border: 2px solid rgba(0,217,255,0.5);
+        }
+
+        .btn-small {
+            padding: 8px 12px;
+            font-size: 0.85rem;
+        }
+
         select {
             width: 100%;
             padding: 15px 20px;
@@ -415,6 +457,18 @@
             </div>
 
             <div class="input-group">
+                <label>Reference Image (optional)</label>
+                <div class="image-upload-area">
+                    <input type="file" id="refImage" accept="image/*" onchange="handleImageUpload(event)">
+                    <div class="upload-preview hidden" id="uploadPreview">
+                        <img id="previewImg" src="" alt="Preview">
+                        <button class="btn btn-secondary btn-small" onclick="clearImage()">✕ Remove</button>
+                        <button class="btn btn-primary btn-small" onclick="captionImage()">🔍 Get Caption</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-group">
                 <label for="aspectRatio">Aspect Ratio</label>
                 <select id="aspectRatio">
                     <option value="IMAGE_ASPECT_RATIO_LANDSCAPE">Landscape (16:9)</option>
@@ -443,6 +497,61 @@
 
     <script>
         let isReady = false;
+        let uploadedImageData = null;
+
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                uploadedImageData = e.target.result;
+                document.getElementById('previewImg').src = uploadedImageData;
+                document.getElementById('uploadPreview').classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearImage() {
+            uploadedImageData = null;
+            document.getElementById('refImage').value = '';
+            document.getElementById('uploadPreview').classList.add('hidden');
+        }
+
+        async function captionImage() {
+            if (!uploadedImageData) {
+                showError('No image uploaded');
+                return;
+            }
+
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            
+            loading.classList.remove('hidden');
+            loading.querySelector('p').textContent = 'Analyzing image... 🔍';
+            error.classList.add('hidden');
+
+            try {
+                const res = await fetch('/api/caption', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ imageData: uploadedImageData })
+                });
+
+                const data = await res.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                const prompt = document.getElementById('prompt');
+                prompt.value = data.caption + '\n\n' + prompt.value;
+                loading.classList.add('hidden');
+            } catch (err) {
+                loading.classList.add('hidden');
+                showError(err.message);
+            }
+        }
 
         async function initBrowser() {
             const btn = document.getElementById('initBtn');

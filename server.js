@@ -250,6 +250,54 @@ app.post('/api/generate', async (req, res) => {
     }
 });
 
+app.post('/api/caption', async (req, res) => {
+    try {
+        const { imageData } = req.body;
+        
+        if (!imageData) {
+            return res.status(400).json({ error: 'Image data is required' });
+        }
+
+        if (!imageFX) {
+            await initBrowser();
+            if (!imageFX) {
+                await initImageFX();
+            }
+        }
+
+        console.log('Generating caption from image...');
+        
+        const base64Match = imageData.match(/^data:image\/(\w+);base64,(.+)$/);
+        if (!base64Match) {
+            return res.status(400).json({ error: 'Invalid image format' });
+        }
+        
+        const imageType = base64Match[1].toLowerCase();
+        const base64Data = base64Match[2];
+        
+        const tempPath = path.join(__dirname, `temp-caption-${Date.now()}.${imageType}`);
+        fs.writeFileSync(tempPath, Buffer.from(base64Data, 'base64'));
+        
+        try {
+            const captions = await imageFX.generateCaptionsFromImage(tempPath, imageType, 1);
+            fs.unlinkSync(tempPath);
+            
+            if (captions && captions.length > 0) {
+                console.log('Caption generated:', captions[0].substring(0, 50) + '...');
+                res.json({ success: true, caption: captions[0] });
+            } else {
+                res.status(500).json({ error: 'No caption generated' });
+            }
+        } catch (err) {
+            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+            throw err;
+        }
+    } catch (error) {
+        console.error('Caption error:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.get('/api/health', (req, res) => {
     res.json({ 
         status: 'ok', 
