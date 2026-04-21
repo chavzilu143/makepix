@@ -6,6 +6,7 @@ const fs = require('fs');
 const app = express();
 const PORT = 3000;
 const USER_DATA_DIR = path.join(__dirname, 'browser-data');
+const COOKIE_FILE = path.join(__dirname, 'google-cookie.txt');
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static('public'));
@@ -14,6 +15,44 @@ let context = null;
 let page = null;
 let isInitializing = false;
 let initError = null;
+let imageFX = null;
+
+async function extractAndSaveCookies() {
+    if (!context) throw new Error('Browser not initialized');
+    
+    const labsCookies = await context.cookies('https://labs.google');
+    const googleCookies = await context.cookies('https://google.com');
+    const accountsCookies = await context.cookies('https://accounts.google.com');
+    const apisCookies = await context.cookies('https://googleapis.com');
+    
+    const allCookies = [...labsCookies, ...googleCookies, ...accountsCookies, ...apisCookies];
+    
+    const uniqueCookies = {};
+    allCookies.forEach(c => {
+        uniqueCookies[c.name] = c.value;
+    });
+    
+    const cookieString = Object.entries(uniqueCookies).map(([k, v]) => `${k}=${v}`).join('; ');
+    
+    fs.writeFileSync(COOKIE_FILE, cookieString);
+    console.log(`Cookies saved (${Object.keys(uniqueCookies).length} cookies)`);
+    
+    return cookieString;
+}
+
+async function initImageFX() {
+    const { ImageFX } = await import('@rohitaryal/imagefx-api');
+    
+    let cookieString;
+    if (fs.existsSync(COOKIE_FILE)) {
+        cookieString = fs.readFileSync(COOKIE_FILE, 'utf-8').trim();
+    } else {
+        cookieString = await extractAndSaveCookies();
+    }
+    
+    imageFX = new ImageFX(cookieString);
+    console.log('ImageFX initialized with cookies');
+}
 
 async function initBrowser() {
     if (page) return { success: true };
@@ -48,26 +87,28 @@ async function initBrowser() {
             console.log('>>> Please sign in to Google in the browser window <<<');
         }
         
-        await page.goto('https://labs.google/fx/tools/flow', { 
+        await page.goto('https://labs.google/fx/tools/image-fx', { 
             waitUntil: 'networkidle',
             timeout: 120000
         });
         
         if (isFirstRun) {
             console.log('Waiting for sign-in...');
+            console.log('(Browser will stay open until you sign in and the page loads)');
             
             let attempts = 0;
-            const maxAttempts = 60;
+            const maxAttempts = 150;
             
             while (attempts < maxAttempts) {
                 const url = page.url();
                 
                 if (url.includes('labs.google/fx')) {
-                    const hasRecaptcha = await page.evaluate(() => {
-                        return !!(window.grecaptcha && window.grecaptcha.enterprise);
+                    const isSignedIn = await page.evaluate(() => {
+                        const noSignInBtn = !document.body.innerText.includes('Sign in');
+                        return noSignInBtn;
                     }).catch(() => false);
                     
-                    if (hasRecaptcha) {
+                    if (isSignedIn) {
                         console.log('Sign-in complete!');
                         break;
                     }
@@ -76,22 +117,20 @@ async function initBrowser() {
                 await page.waitForTimeout(2000);
                 attempts++;
                 
-                if (attempts % 10 === 0) {
-                    console.log(`Waiting... (${attempts * 2}s)`);
+                if (attempts % 15 === 0) {
+                    console.log(`Still waiting for sign-in... (${attempts * 2}s)`);
                 }
             }
             
             if (attempts >= maxAttempts) {
                 throw new Error('Timeout waiting for sign-in');
             }
-        } else {
-            console.log('Loading...');
-            await page.waitForFunction(() => {
-                return window.grecaptcha && window.grecaptcha.enterprise;
-            }, { timeout: 60000 });
         }
         
         console.log('Session ready!');
+        
+        await extractAndSaveCookies();
+        await initImageFX();
         
         if (isFirstRun) {
             console.log('Switching to headless mode...');
@@ -116,11 +155,6 @@ async function initBrowser() {
             
             const pages = context.pages();
             page = pages.length > 0 ? pages[0] : await context.newPage();
-            
-            await page.goto('https://labs.google/fx/tools/flow', { 
-                waitUntil: 'networkidle',
-                timeout: 60000
-            });
             
             console.log('Ready.');
         }
@@ -150,138 +184,68 @@ app.post('/api/generate', async (req, res) => {
             return res.status(400).json({ error: 'Prompt is required' });
         }
 
-        if (!page) {
+        if (!imageFX) {
             await initBrowser();
+            if (!imageFX) {
+                await initImageFX();
+            }
         }
 
         console.log(`Generating: "${prompt}"`);
-
-        const currentUrl = page.url();
+        console.log('Calling ImageFX API directly...');
         
-        if (!currentUrl.includes('labs.google/fx/tools/flow') && !currentUrl.includes('/project/')) {
-            await page.goto('https://labs.google/fx/tools/flow', { 
-                waitUntil: 'networkidle',
-                timeout: 60000 
-            });
-        }
-
-        await page.screenshot({ path: 'debug-screenshot.png' });
-
-        const signInButton = await page.$('button:has-text("Sign in"), a:has-text("Sign in")');
-        if (signInButton) {
-            throw new Error('Session expired. Delete browser-data folder and restart.');
-        }
-
-        if (currentUrl.includes('/project/')) {
-            console.log('Using existing project...');
-        } else {
-            console.log('Creating new project...');
-            
-            await page.waitForLoadState('networkidle');
-            await page.waitForTimeout(2000);
-            
-            let newProjectButton = null;
-            const btnSelectors = [
-                'button:has-text("New project")',
-                'a:has-text("New project")',
-                '[aria-label*="New project"]',
-                '[aria-label*="new project"]',
-                'button:has-text("New")',
-                '[data-testid*="new"]'
-            ];
-            
-            for (const selector of btnSelectors) {
-                try {
-                    const btn = await page.$(selector);
-                    if (btn && await btn.isVisible()) {
-                        newProjectButton = btn;
-                        break;
-                    }
-                } catch (e) {}
-            }
-            
-            if (!newProjectButton) {
-                await page.screenshot({ path: 'debug-no-button.png' });
-                throw new Error('Could not find New project button. Check debug-no-button.png');
-            }
-            
-            await newProjectButton.click();
-            await page.waitForURL(/\/project\//, { timeout: 30000 });
-        }
+        const { Prompt } = await import('@rohitaryal/imagefx-api');
         
-        await page.waitForTimeout(2000);
-
-        const responsePromise = new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error('Generation timeout')), 120000);
-            
-            const handler = async (response) => {
-                const url = response.url();
-                if (url.includes('batchGenerateImages')) {
-                    try {
-                        const json = await response.json();
-                        if (json.media && json.media.length > 0) {
-                            clearTimeout(timeout);
-                            page.off('response', handler);
-                            resolve(json);
-                        }
-                    } catch (e) {}
-                }
-            };
-            page.on('response', handler);
+        const promptObj = new Prompt({
+            prompt: prompt,
+            aspectRatio: aspectRatio,
+            numberOfImages: 1,
+            generationModel: 'IMAGEN_3_5'
         });
-
-        await page.screenshot({ path: 'debug-screenshot.png' });
-
-        let promptInput = await page.waitForSelector('div[contenteditable="true"]:not([aria-hidden="true"])', { timeout: 10000 });
         
-        if (!promptInput) {
-            throw new Error('Could not find prompt input');
-        }
-
-        await promptInput.click();
-        await page.keyboard.type(prompt);
+        const generatedImages = await imageFX.generateImage(promptObj);
         
-        await page.waitForTimeout(500);
-        
-        let generateButton = null;
-        const genBtnSelectors = [
-            'button[aria-label*="Generate"]',
-            'button[aria-label*="Create"]', 
-            'button:has-text("Generate")',
-            'button:has(svg)',
-        ];
-        
-        for (const selector of genBtnSelectors) {
-            try {
-                const btn = await page.$(selector);
-                if (btn && await btn.isVisible()) {
-                    generateButton = btn;
-                    break;
+        const images = generatedImages.map((img, i) => {
+            let imageUrl;
+            
+            if (img.encodedImage) {
+                imageUrl = `data:image/jpeg;base64,${img.encodedImage}`;
+            } else if (img.image) {
+                imageUrl = `data:image/jpeg;base64,${img.image}`;
+            } else if (typeof img === 'string' && img.startsWith('/9j/')) {
+                imageUrl = `data:image/jpeg;base64,${img}`;
+            } else if (img.url) {
+                imageUrl = img.url;
+            } else if (img.imageUrl) {
+                imageUrl = img.imageUrl;
+            } else if (img.fifeUrl) {
+                imageUrl = img.fifeUrl;
+            } else {
+                const imgStr = JSON.stringify(img);
+                if (imgStr.startsWith('"/9j/')) {
+                    imageUrl = `data:image/jpeg;base64,${imgStr.slice(1, -1)}`;
+                } else {
+                    imageUrl = `data:image/jpeg;base64,${imgStr}`;
                 }
-            } catch (e) {}
-        }
-        
-        if (!generateButton) {
-            await page.keyboard.press('Enter');
-        } else {
-            await generateButton.click();
-        }
-        
-        console.log('Generating...');
-
-        const result = await responsePromise;
-
-        const images = result.media?.map(m => ({
-            id: m.name,
-            url: m.image?.generatedImage?.fifeUrl,
-            prompt: m.image?.generatedImage?.prompt,
-            seed: m.image?.generatedImage?.seed
-        })) || [];
+            }
+            
+            return {
+                id: `img-${Date.now()}-${i}`,
+                url: imageUrl,
+                prompt: prompt
+            };
+        });
 
         console.log(`Done! ${images.length} image(s)`);
         res.json({ success: true, images });
     } catch (error) {
         console.error('Error:', error.message);
+        
+        if (error.message.includes('cookie') || error.message.includes('auth') || error.message.includes('401')) {
+            fs.unlinkSync(COOKIE_FILE);
+            imageFX = null;
+        }
+        
         res.status(500).json({ error: error.message });
     }
 });
@@ -289,7 +253,7 @@ app.post('/api/generate', async (req, res) => {
 app.get('/api/health', (req, res) => {
     res.json({ 
         status: 'ok', 
-        browserReady: !!(page && !isInitializing),
+        browserReady: !!imageFX,
         isInitializing,
         error: initError
     });

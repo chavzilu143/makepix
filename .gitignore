@@ -1,6 +1,6 @@
 node_modules/
 browser-data/
 debug-*.png
-debug-*.png
 *.har
 .env
+google-cookie.txt

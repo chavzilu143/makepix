@@ -526,13 +526,31 @@
                     <div class="image-info">
                         <p class="image-prompt">${img.prompt}</p>
                         <div class="image-actions">
-                            <a href="${img.url}" target="_blank" class="btn btn-secondary">Open Full</a>
-                            <button class="btn btn-primary" onclick="downloadImage('${img.url}', '${img.id}')">Download</button>
+                            <button class="btn btn-secondary" data-url="${img.id}">Open Full</button>
+                            <button class="btn btn-primary" data-download="${img.id}">Download</button>
                         </div>
                     </div>
                 `;
+                card.dataset.imageUrl = img.url;
+                card.dataset.imageId = img.id;
+                
+                card.querySelector('[data-url]').onclick = () => openFullImage(img.url);
+                card.querySelector('[data-download]').onclick = () => downloadImage(img.url, img.id);
+                
                 grid.insertBefore(card, grid.firstChild);
             });
+        }
+
+        function openFullImage(dataUrl) {
+            const win = window.open('', '_blank');
+            win.document.write(`
+                <html>
+                <head><title>MakePix - Full Image</title>
+                <style>body{margin:0;background:#0a0f1a;display:flex;justify-content:center;align-items:center;min-height:100vh;}
+                img{max-width:100%;max-height:100vh;}</style></head>
+                <body><img src="${dataUrl}"></body></html>
+            `);
+            win.document.close();
         }
 
         async function downloadImage(url, id) {

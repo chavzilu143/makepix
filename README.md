@@ -1,6 +1,12 @@
 # MakePix
 
-AI image generation app powered by Google's Flow.
+AI image generation app using Google Flow's API directly.
+
+## Features
+
+- **Direct API calls** - No browser automation for generation
+- **One-time login** - Sign in once, cookies are saved
+- **Clean web UI** - Simple prompt input with aspect ratio selection
 
 ## Setup
 
@@ -23,36 +29,74 @@ npx playwright install chromium
 npm start
 ```
 
-1. A browser window opens - sign in to Google
-2. Wait for Flow page to load
-3. Terminal shows "Ready" when done
-4. Open http://localhost:3000
+1. Browser opens - sign in to Google
+2. Cookies are extracted and saved
+3. Open http://localhost:3000
 
-### After First Run
+### Subsequent Runs
 
 ```bash
 npm start
 ```
 
-Browser runs invisibly. Just open http://localhost:3000.
+No browser needed. Direct API calls using saved cookies.
 
-### Reset Session
+### Reset Auth
 
 ```bash
-rm -rf browser-data
+rm google-cookie.txt browser-data -rf
 npm start
 ```
 
-## How to Use
+## How It Works
 
-1. Enter a prompt
-2. Select aspect ratio
-3. Click "Make Pix!"
-4. Wait ~30-60 seconds
-5. Download your image
+### Architecture
 
-## Notes
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────────┐
+│   Web UI    │────▶│   Express API    │────▶│   Google Flow API   │
+│ (localhost) │     │   (server.js)    │     │ (aisandbox-pa.api)  │
+└─────────────┘     └──────────────────┘     └─────────────────────┘
+                            │
+                    ┌───────▼───────┐
+                    │ imagefx-api   │
+                    │   package     │
+                    └───────────────┘
+```
 
-- First run requires Google sign-in (session saves automatically)
-- One image at a time
-- Keep the server running while generating
+### API Details
+
+Google Flow uses an internal API at `aisandbox-pa.googleapis.com`:
+- **Endpoint**: `/v1:runImageFx`
+- **Model**: `IMAGEN_3_5`
+- **Auth**: Google session cookies (OAuth-based)
+- **Response**: Base64-encoded JPEG images
+
+### Why Cookies?
+
+Google's API requires OAuth authentication, not API keys. The `@rohitaryal/imagefx-api` package handles:
+1. Cookie-based authentication
+2. Request formatting
+3. Response parsing
+
+### Reverse Engineering
+
+The API was discovered by:
+1. Inspecting network requests on labs.google/fx
+2. Analyzing HAR files from browser sessions
+3. Identifying the `aisandbox-pa.googleapis.com` endpoint
+4. Using the `imagefx-api` npm package that implements these findings
+
+## Limitations
+
+- Requires Google account with Flow access
+- Cookies expire (re-login needed occasionally)
+- Rate limits apply (Google's internal limits)
+- No official API documentation
+
+## Tech Stack
+
+- **Backend**: Node.js, Express
+- **API Client**: @rohitaryal/imagefx-api
+- **Auth**: Playwright (one-time cookie extraction)
+- **Frontend**: Vanilla HTML/CSS/JS

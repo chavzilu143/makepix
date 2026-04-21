@@ -7,11 +7,16 @@
     "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["ai", "image-generation", "google-flow"],
+  "keywords": [
+    "ai",
+    "image-generation",
+    "google-flow"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@rohitaryal/imagefx-api": "^3.0.3",
     "express": "^5.2.1",
     "playwright": "^1.59.1"
   }
