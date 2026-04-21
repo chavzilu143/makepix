@@ -6,7 +6,8 @@ AI image generation app using Google Flow's API directly.
 
 - **Direct API calls** - No browser automation for generation
 - **One-time login** - Sign in once, cookies are saved
-- **Clean web UI** - Simple prompt input with aspect ratio selection
+- **Image attachments** - Upload reference images, get AI captions
+- **Clean web UI** - Prompt input with aspect ratio selection
 
 ## Setup
 
@@ -48,6 +49,20 @@ rm google-cookie.txt browser-data -rf
 npm start
 ```
 
+## Features Guide
+
+### Text-to-Image
+1. Enter a prompt describing your image
+2. Select aspect ratio
+3. Click "Make Pix!"
+
+### Image Attachment
+1. Click the file input to upload a reference image
+2. Click "🔍 Get Caption" to analyze the image
+3. AI generates a description and adds it to your prompt
+4. Edit the caption as needed
+5. Click "Make Pix!" to generate
+
 ## How It Works
 
 ### Architecture
@@ -67,7 +82,8 @@ npm start
 ### API Details
 
 Google Flow uses an internal API at `aisandbox-pa.googleapis.com`:
-- **Endpoint**: `/v1:runImageFx`
+- **Generation**: `/v1:runImageFx` - Text-to-image
+- **Captioning**: `backbone.captionImage` - Image-to-text
 - **Model**: `IMAGEN_3_5`
 - **Auth**: Google session cookies (OAuth-based)
 - **Response**: Base64-encoded JPEG images
@@ -93,6 +109,7 @@ The API was discovered by:
 - Cookies expire (re-login needed occasionally)
 - Rate limits apply (Google's internal limits)
 - No official API documentation
+- Image attachment uses captioning (not direct image-to-image)
 
 ## Tech Stack
 
